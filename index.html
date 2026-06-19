@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FX / CCS 컨펌 → 보고서 생성기</title>
+<style>
+  :root {
+    --bg: #f9f9f8;
+    --surface: #ffffff;
+    --border: #e2e2df;
+    --border-strong: #c8c8c4;
+    --text: #1a1a18;
+    --text-muted: #6b6b67;
+    --accent: #1a1a18;
+    --green-bg: #f0fdf4;
+    --green-border: #86efac;
+    --yellow-bg: #fffbeb;
+    --yellow-border: #fcd34d;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --font: -apple-system, 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
+    --mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.6; min-height: 100vh; }
+
+  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 52px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+  .header-title { font-size: 14px; font-weight: 600; letter-spacing: -0.01em; }
+  .header-sub { font-size: 12px; color: var(--text-muted); }
+  .api-badge { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-muted); cursor: pointer; padding: 5px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); }
+  .api-badge:hover { border-color: var(--border-strong); }
+  .dot-status { width: 7px; height: 7px; border-radius: 50%; background: #d1d5db; }
+  .dot-status.ok { background: #22c55e; }
+
+  .main { max-width: 780px; margin: 0 auto; padding: 32px 24px 80px; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px 24px; margin-bottom: 16px; }
+  .card-label { font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 14px; }
+
+  .upload-zone { border: 1.5px dashed var(--border-strong); border-radius: var(--radius); padding: 28px 20px; text-align: center; cursor: pointer; transition: all .15s; }
+  .upload-zone:hover, .upload-zone.drag { border-color: var(--accent); background: #f5f5f3; }
+  .upload-icon { font-size: 30px; margin-bottom: 8px; }
+  .upload-text { font-size: 14px; color: var(--text-muted); }
+  .upload-text strong { color: var(--text); }
+  input[type=file] { display: none; }
+
+  .file-chip { display: flex; align-items: center; gap: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 8px 12px; margin-top: 12px; font-size: 13px; }
+  .file-chip .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-chip .rm { background: none; border: none; cursor: pointer; color: var(--text-muted); font-size: 16px; line-height: 1; padding: 0 2px; }
+  .file-chip .rm:hover { color: var(--text); }
+
+  .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; }
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field.span2 { grid-column: 1 / -1; }
+  .field label { font-size: 11px; color: var(--text-muted); font-weight: 500; }
+  .field input { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 13px; background: var(--surface); color: var(--text); font-family: var(--font); width: 100%; outline: none; transition: border-color .15s; }
+  .field input:focus { border-color: var(--accent); }
+  .field input.ai { border-color: var(--green-border); background: var(--green-bg); }
+  .field input.manual { border-color: var(--yellow-border); background: var(--yellow-bg); }
+
+  .legend { display: flex; gap: 14px; margin-bottom: 14px; }
+  .leg-item { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-muted); }
+  .leg-dot { width: 8px; height: 8px; border-radius: 2px; }
+  .leg-dot.ai { background: #86efac; }
+  .leg-dot.manual { background: #fcd34d; }
+
+  .badge { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 100px; font-size: 11px; font-weight: 600; background: #f0f0ee; color: #444; margin-bottom: 14px; }
+
+  .btn { padding: 9px 18px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all .15s; font-family: var(--font); }
+  .btn-primary { background: var(--accent); color: #fff; width: 100%; padding: 11px; font-size: 14px; margin-top: 4px; }
+  .btn-primary:hover:not(:disabled) { opacity: .85; }
+  .btn-primary:disabled { opacity: .35; cursor: not-allowed; }
+  .btn-secondary { background: var(--bg); color: var(--text); border: 1px solid var(--border); width: 100%; margin-top: 10px; }
+  .btn-secondary:hover { border-color: var(--border-strong); }
+  .btn-copy { background: var(--bg); color: var(--text-muted); border: 1px solid var(--border); padding: 5px 12px; font-size: 12px; }
+  .btn-copy:hover { color: var(--text); border-color: var(--border-strong); }
+
+  .progress { text-align: center; font-size: 13px; color: var(--text-muted); min-height: 20px; margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+  .spinner { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .error { background: #fef2f2; border: 1px solid #fca5a5; border-radius: var(--radius-sm); padding: 10px 14px; font-size: 13px; color: #991b1b; margin-top: 10px; }
+
+  .report-tabs { display: flex; gap: 8px; margin-bottom: 10px; }
+  .rtab { padding: 6px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm); cursor: pointer; font-size: 12px; font-weight: 500; background: var(--surface); color: var(--text-muted); font-family: var(--font); }
+  .rtab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .out-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .out-label { font-size: 12px; font-weight: 500; color: var(--text-muted); }
+  .output { background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 14px; font-size: 12.5px; line-height: 1.9; white-space: pre-wrap; font-family: var(--mono); color: var(--text); min-height: 100px; }
+
+  /* API Key Modal */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 200; display: flex; align-items: center; justify-content: center; }
+  .modal { background: var(--surface); border-radius: var(--radius); padding: 28px; width: 100%; max-width: 420px; margin: 16px; }
+  .modal h2 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+  .modal p { font-size: 13px; color: var(--text-muted); margin-bottom: 16px; line-height: 1.6; }
+  .modal input { width: 100%; padding: 9px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 13px; font-family: var(--mono); outline: none; margin-bottom: 10px; }
+  .modal input:focus { border-color: var(--accent); }
+  .modal-note { font-size: 11px; color: var(--text-muted); margin-top: 8px; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
+  .modal-actions .btn { flex: 1; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-title">컨펌 → 보고서 생성기</div>
+  </div>
+  <div class="api-badge" onclick="openApiModal()">
+    <div class="dot-status" id="api-dot"></div>
+    <span id="api-label">API 키 설정</span>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- Upload -->
+  <div class="card">
+    <div class="card-label">① 컨퍼메이션 PDF 업로드</div>
+    <div class="upload-zone" id="drop-zone" onclick="document.getElementById('pdf-input').click()"
+         ondragover="event.preventDefault();this.classList.add('drag')"
+         ondragleave="this.classList.remove('drag')"
+         ondrop="handleDrop(event)">
+      <div class="upload-icon">📄</div>
+      <div class="upload-text"><strong>클릭하거나 여기에 PDF를 드래그</strong><br>CCS / FX Swap / FX Spot 컨퍼메이션 1건</div>
+    </div>
+    <input type="file" id="pdf-input" accept=".pdf" onchange="handleFile(this.files[0])">
+    <div id="file-chip-area"></div>
+  </div>
+
+  <!-- Fund -->
+  <div class="card" id="fund-card" style="display:none">
+    <div class="card-label">② 펀드명</div>
+    <div class="field">
+      <label>펀드명</label>
+      <input type="text" id="fund-name" value="흥국생명 일반계정 해외채권 투자일임">
+    </div>
+  </div>
+
+  <button class="btn btn-primary" id="parse-btn" disabled onclick="runParse()">
+    ✦ AI로 파싱 &amp; 보고서 생성
+  </button>
+  <div class="progress" id="progress"></div>
+  <div id="error-area"></div>
+
+  <!-- Parsed Fields -->
+  <div id="result-area" style="display:none; margin-top:20px">
+    <div class="card">
+      <div class="card-label">③ 파싱 결과 확인 · 보완</div>
+      <div class="legend">
+        <div class="leg-item"><div class="leg-dot ai"></div>AI 추출값</div>
+        <div class="leg-item"><div class="leg-dot manual"></div>직접 입력 필요</div>
+      </div>
+      <div class="badge" id="trade-badge">CCS</div>
+      <div class="field-grid" id="field-grid"></div>
+      <button class="btn btn-secondary" onclick="regenReports()">↺ 값 수정 후 보고서 재생성</button>
+    </div>
+
+    <!-- Reports -->
+    <div class="card">
+      <div class="card-label">④ 보고서 복사</div>
+      <div class="report-tabs">
+        <button class="rtab active" onclick="switchTab('bene',this)">수익자용 (흥국생명)</button>
+        <button class="rtab" onclick="switchTab('int',this)">내부결재용</button>
+      </div>
+      <div class="out-header">
+        <span class="out-label" id="out-label">수익자용</span>
+        <button class="btn btn-copy" onclick="copyReport()">복사</button>
+      </div>
+      <div class="output" id="out-bene"></div>
+      <div class="output" id="out-int" style="display:none"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- API Key Modal -->
+<div class="modal-backdrop" id="modal" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h2>Anthropic API 키 설정</h2>
+    <p>키는 이 브라우저의 localStorage에만 저장되며 외부로 전송되지 않습니다.<br>
+    발급: <a href="https://console.anthropic.com" target="_blank" style="color:inherit">console.anthropic.com</a> → API Keys</p>
+    <input type="password" id="api-key-input" placeholder="sk-ant-..." autocomplete="off">
+    <div class="modal-note">⚠ 키는 암호화되지 않고 브라우저에 저장됩니다. 공용 PC에서는 사용 후 삭제하세요.</div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeModal()">취소</button>
+      <button class="btn btn-primary" style="width:auto;padding:9px 18px" onclick="saveKey()">저장</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── API Key ──────────────────────────────────────────────
+const KEY_NAME = 'fx_parser_api_key';
+let apiKey = localStorage.getItem(KEY_NAME) || '';
+updateApiStatus();
+
+function updateApiStatus() {
+  const dot = document.getElementById('api-dot');
+  const lbl = document.getElementById('api-label');
+  if (apiKey) { dot.className = 'dot-status ok'; lbl.textContent = 'API 키 설정됨'; }
+  else { dot.className = 'dot-status'; lbl.textContent = 'API 키 설정'; }
+}
+function openApiModal() {
+  document.getElementById('api-key-input').value = apiKey;
+  document.getElementById('modal').style.display = 'flex';
+  setTimeout(() => document.getElementById('api-key-input').focus(), 50);
+}
+function closeModal() { document.getElementById('modal').style.display = 'none'; }
+function saveKey() {
+  const v = document.getElementById('api-key-input').value.trim();
+  if (!v) { localStorage.removeItem(KEY_NAME); apiKey = ''; }
+  else { localStorage.setItem(KEY_NAME, v); apiKey = v; }
+  updateApiStatus();
+  closeModal();
+}
+
+// ── File Handling ─────────────────────────────────────────
+let currentFile = null;
+let parsedData = null;
+let activeTab = 'bene';
+
+function handleDrop(ev) {
+  ev.preventDefault();
+  document.getElementById('drop-zone').classList.remove('drag');
+  const f = ev.dataTransfer.files[0];
+  if (f && f.type === 'application/pdf') handleFile(f);
+}
+function handleFile(f) {
+  if (!f) return;
+  currentFile = f;
+  document.getElementById('file-chip-area').innerHTML =
+    `<div class="file-chip">📄<span class="name">${f.name}</span><button class="rm" onclick="clearFile()">×</button></div>`;
+  document.getElementById('parse-btn').disabled = false;
+  document.getElementById('fund-card').style.display = 'block';
+}
+function clearFile() {
+  currentFile = null;
+  document.getElementById('file-chip-area').innerHTML = '';
+  document.getElementById('parse-btn').disabled = true;
+  document.getElementById('fund-card').style.display = 'none';
+  document.getElementById('result-area').style.display = 'none';
+  document.getElementById('progress').innerHTML = '';
+  document.getElementById('error-area').innerHTML = '';
+  document.getElementById('pdf-input').value = '';
+}
+
+// ── Parse ─────────────────────────────────────────────────
+function setProgress(msg) {
+  document.getElementById('progress').innerHTML = msg
+    ? `<div class="spinner"></div>${msg}` : '';
+}
+function toBase64(file) {
+  return new Promise((res, rej) => {
+    const r = new FileReader();
+    r.onload = () => res(r.result.split(',')[1]);
+    r.onerror = rej;
+    r.readAsDataURL(file);
+  });
+}
+function fmtDate(s) {
+  if (!s) return '';
+  const m = String(s).match(/(\d{4})[-\/\.\s](\d{1,2})[-\/\.\s](\d{1,2})/);
+  if (!m) return s;
+  return `${m[1]}-${m[2].padStart(2,'0')}-${m[3].padStart(2,'0')}`;
+}
+
+const PARSE_PROMPT = `You are a financial document parser for a Korean insurance company's FX/derivatives team. Extract deal terms and return ONLY a valid JSON object — no markdown, no explanation.
+
+STEP 1 — Determine trade_type:
+- "CCS": cross currency swap / 통화스왑. Two-currency notional, fixed coupon rates on both legs, initial and final exchange of principal.
+- "FX_SWAP": FX swap with near leg and far leg (two value dates), often with a reference bond in custody.
+- "FX_SPOT": simple spot or today FX transaction, single value date, seller/buyer.
+
+STEP 2 — Extract fields by type:
+
+CCS JSON:
+{
+  "trade_type":"CCS",
+  "currency_pair":"e.g. USDKRW",
+  "bank_name":"counterparty bank in Korean preferred",
+  "contact_person":"name + title if found, else null",
+  "contact_tel":"phone number if found, else null",
+  "trade_date":"YYYY-MM-DD",
+  "effective_date":"YYYY-MM-DD",
+  "termination_date":"YYYY-MM-DD",
+  "foreign_currency":"USD or EUR etc",
+  "foreign_notional":"e.g. USD 15,000,000.00",
+  "fx_rate":"e.g. 1,507.00",
+  "initial_foreign_amount":"amount of foreign currency exchanged at initial date (what bank pays to client) e.g. USD 14,710,000.00",
+  "final_foreign_amount":"amount of foreign currency at final exchange e.g. USD 15,079,600.00",
+  "pay_coupon_currency":"currency client PAYS (foreign leg)",
+  "pay_coupon_rate":"rate client pays e.g. 4.625",
+  "receive_coupon_rate":"KRW rate client receives e.g. 4.122",
+  "bond_name":"reference bond name if found else null",
+  "bond_isin":"ISIN if found else null",
+  "bond_face_amount":"face amount of bond e.g. 15,000,000.00 (number only, no currency)"
+}
+
+FX_SWAP JSON:
+{
+  "trade_type":"FX_SWAP",
+  "bank_name":"counterparty bank in Korean preferred",
+  "contact_person":"name + title if found, else null",
+  "contact_tel":"phone number if found, else null",
+  "trade_date":"YYYY-MM-DD",
+  "near_value_date":"YYYY-MM-DD",
+  "far_value_date":"YYYY-MM-DD",
+  "foreign_currency":"EUR or USD etc",
+  "near_foreign_amount":"amount at near leg (client buys foreign) e.g. 20,000,000.00",
+  "near_rate":"exchange rate at near leg",
+  "far_foreign_amount":"amount at far leg (client sells foreign) e.g. 27,530,621.72",
+  "far_rate":"exchange rate at far leg",
+  "bond_name":"reference bond name if found else null",
+  "bond_isin":"ISIN if found else null",
+  "bond_face_amount":"face amount (number only) e.g. 10,000,000"
+}
+
+FX_SPOT JSON:
+{
+  "trade_type":"FX_SPOT",
+  "bank_name":"counterparty bank in Korean preferred",
+  "contact_person":"name + title if found, else null",
+  "contact_tel":"phone number if found, else null",
+  "trade_date":"YYYY-MM-DD",
+  "value_date":"YYYY-MM-DD",
+  "sell_currency":"currency being sold by client e.g. USD",
+  "sell_amount":"amount sold e.g. 10,327.65",
+  "exchange_rate":"e.g. 1,467.000"
+}
+
+Rules:
+- KDB (산업은행) EUR/KRW CCS: client pays EUR (pay_coupon_currency=EUR), client receives KRW.
+- Shinhan FX Swap: 흥국생명 BUY = near leg, 흥국생명 SELL = far leg.
+- For contact_person: combine name and title naturally e.g. "박지수 대리"
+- Return ONLY the JSON object.`;
+
+async function runParse() {
+  if (!currentFile) return;
+  if (!apiKey) { openApiModal(); return; }
+  document.getElementById('parse-btn').disabled = true;
+  document.getElementById('result-area').style.display = 'none';
+  document.getElementById('error-area').innerHTML = '';
+  setProgress('PDF 읽는 중...');
+
+  try {
+    const b64 = await toBase64(currentFile);
+    setProgress('AI가 거래 내용 파싱 중...');
+
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 1000,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: b64 } },
+            { type: 'text', text: PARSE_PROMPT }
+          ]
+        }]
+      })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.error?.message || `HTTP ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    const raw = data.content.map(c => c.text || '').join('');
+    const clean = raw.replace(/```json|```/g, '').trim();
+    parsedData = JSON.parse(clean);
+
+    setProgress('보고서 생성 중...');
+    renderFields(parsedData);
+    generateReports();
+    document.getElementById('result-area').style.display = 'block';
+    setProgress('');
+    document.getElementById('result-area').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch(e) {
+    setProgress('');
+    document.getElementById('error-area').innerHTML =
+      `<div class="error">오류: ${e.message}</div>`;
+  }
+  document.getElementById('parse-btn').disabled = false;
+}
+
+// ── Render Fields ─────────────────────────────────────────
+function field(label, key, val, manual, span2) {
+  const cls = manual || !val ? 'manual' : 'ai';
+  const spanCls = span2 ? ' span2' : '';
+  return `<div class="field${spanCls}">
+    <label>${label}</label>
+    <input type="text" class="parsed-field ${cls}" data-key="${key}" value="${(val||'').replace(/"/g,'&quot;')}">
+  </div>`;
+}
+
+function renderFields(d) {
+  document.getElementById('trade-badge').textContent =
+    d.trade_type === 'CCS' ? `CCS (${d.currency_pair||''})` :
+    d.trade_type === 'FX_SWAP' ? 'FX Swap' : 'FX Spot Sell';
+
+  let html = '';
+  if (d.trade_type === 'CCS') {
+    html += field('스왑거래일', 'trade_date', fmtDate(d.trade_date), false);
+    html += field('스왑결제일 (발효일)', 'effective_date', fmtDate(d.effective_date), false);
+    html += field('스왑만기일', 'termination_date', fmtDate(d.termination_date), false);
+    html += field('Notional (외화)', 'foreign_notional', d.foreign_notional, false);
+    html += field('Initial (외화)', 'initial_foreign_amount', d.initial_foreign_amount, false);
+    html += field('Final (외화)', 'final_foreign_amount', d.final_foreign_amount, false);
+    html += field('거래환율', 'fx_rate', d.fx_rate, false);
+    html += field(`지급쿠폰 (${d.pay_coupon_currency||'USD'}, %)`, 'pay_coupon_rate', d.pay_coupon_rate, false);
+    html += field('수취쿠폰 (KRW, %)', 'receive_coupon_rate', d.receive_coupon_rate, false);
+    html += field('연환산 헤지수익률 (%)', 'hedge_yield', '', true);
+    html += field('헤지대상 종목명', 'bond_name', d.bond_name, !d.bond_name);
+    html += field('헤지대상 ISIN', 'bond_isin', d.bond_isin, !d.bond_isin);
+    html += field('헤지대상 액면금액', 'bond_face_amount', d.bond_face_amount, !d.bond_face_amount);
+    html += field('거래기관 (은행명)', 'bank_name', d.bank_name, !d.bank_name);
+    html += field('담당자 (이름 직급)', 'contact_person', d.contact_person, !d.contact_person);
+    html += field('담당자 전화', 'contact_tel', d.contact_tel, !d.contact_tel);
+  } else if (d.trade_type === 'FX_SWAP') {
+    html += field('스왑거래일', 'trade_date', fmtDate(d.trade_date), false);
+    html += field('Near 결제일', 'near_value_date', fmtDate(d.near_value_date), false);
+    html += field('Far 만기일', 'far_value_date', fmtDate(d.far_value_date), false);
+    html += field('통화', 'foreign_currency', d.foreign_currency, false);
+    html += field('Near Amount', 'near_foreign_amount', d.near_foreign_amount, false);
+    html += field('Near 환율', 'near_rate', d.near_rate, false);
+    html += field('Far Amount', 'far_foreign_amount', d.far_foreign_amount, false);
+    html += field('Far 환율', 'far_rate', d.far_rate, false);
+    html += field('스왑포인트', 'swap_point', '', true);
+    html += field('연환산 헤지수익률 (%)', 'hedge_yield', '', true);
+    html += field('헤지대상 종목명', 'bond_name', d.bond_name, !d.bond_name);
+    html += field('헤지대상 ISIN', 'bond_isin', d.bond_isin, !d.bond_isin);
+    html += field('헤지대상 액면금액', 'bond_face_amount', d.bond_face_amount, !d.bond_face_amount);
+    html += field('거래기관 (은행명)', 'bank_name', d.bank_name, !d.bank_name);
+    html += field('담당자 (이름 직급)', 'contact_person', d.contact_person, !d.contact_person);
+    html += field('담당자 전화', 'contact_tel', d.contact_tel, !d.contact_tel);
+  } else {
+    html += field('거래일', 'trade_date', fmtDate(d.trade_date), false);
+    html += field('결제일', 'value_date', fmtDate(d.value_date), false);
+    html += field('매도 통화', 'sell_currency', d.sell_currency, false);
+    html += field('거래금액', 'sell_amount', d.sell_amount, false);
+    html += field('교환환율', 'exchange_rate', d.exchange_rate, false);
+    html += field('거래기관 (은행명)', 'bank_name', d.bank_name, !d.bank_name);
+    html += field('담당자 (이름 직급)', 'contact_person', d.contact_person, !d.contact_person);
+    html += field('담당자 전화', 'contact_tel', d.contact_tel, !d.contact_tel);
+  }
+  document.getElementById('field-grid').innerHTML = html;
+}
+
+// ── Report Generation ─────────────────────────────────────
+function getVal(key) {
+  const el = document.querySelector(`.parsed-field[data-key="${key}"]`);
+  return el ? el.value.trim() : '';
+}
+function cpFull() {
+  const bank = getVal('bank_name');
+  const person = getVal('contact_person');
+  const tel = getVal('contact_tel');
+  let cp = bank;
+  if (person) cp += ' ' + person;
+  if (tel) cp += ` (${tel})`;
+  return cp;
+}
+function fund() { return document.getElementById('fund-name').value.trim(); }
+
+function generateReports() {
+  const d = parsedData;
+  let bene = '', intl = '';
+
+  if (d.trade_type === 'CCS') {
+    const ccy = d.pay_coupon_currency || 'USD';
+    const td = getVal('trade_date'), sd = getVal('effective_date'), md = getVal('termination_date');
+    const notional = getVal('foreign_notional');
+    const initial = getVal('initial_foreign_amount');
+    const final_ = getVal('final_foreign_amount');
+    const fxRate = getVal('fx_rate');
+    const payCpn = getVal('pay_coupon_rate');
+    const rcvCpn = getVal('receive_coupon_rate');
+    const hedgeY = getVal('hedge_yield');
+    const bondName = getVal('bond_name');
+    const bondIsin = getVal('bond_isin');
+    const faceAmt = getVal('bond_face_amount');
+    const faceLine = faceAmt ? `${ccy} ${faceAmt}` : '';
+    const hedgeStr = hedgeY ? ` (연환산헤지수익률 ${hedgeY}%)` : '';
+    const hedgeStrInt = hedgeY ? ` (연환산 헤지수익률 ${hedgeY}%)` : '';
+
+    bene = `[CCS 1건]\n\n(1) CCS\n\n헤지대상 종목명 : ${bondName}\n헤지대상 종목 ISIN : ${bondIsin}\n헤지대상 액면금액 : ${faceLine}\n\n스왑거래일 : ${td}\n스왑결제일 : ${sd}\n스왑만기일 : ${md}\n\nNotional : ${notional}\nInitial : ${initial} (@${fxRate})\nFinal : ${final_} (@${fxRate})\n지급쿠폰 : ${ccy} ${payCpn}%\n수취쿠폰 : KRW ${rcvCpn}%${hedgeStr}\n\n거래기관 : ${cpFull()}`;
+
+    intl = `다음과 같이 1건의 장외파생상품 매매(FX 헤지거래)를 보고합니다.\n\n                                          ==  다  음  =\n1. CCS\n\n스왑거래일 : ${td}\n스왑결제일 : ${sd}\n스왑만기일 : ${md}\nNotional : ${notional}\nInitial : ${initial}\nFinal : ${final_}\n지급 쿠폰 : ${ccy} ${payCpn}%\n수취 쿠폰 : KRW ${rcvCpn}%${hedgeStrInt}\n거래환율 : ${fxRate}\n거래기관 : ${cpFull()}\n펀드명 : ${fund()}\n헤지대상 채권 : ${bondName} (${bondIsin})`;
+
+  } else if (d.trade_type === 'FX_SWAP') {
+    const ccy = getVal('foreign_currency');
+    const td = getVal('trade_date'), sd = getVal('near_value_date'), md = getVal('far_value_date');
+    const nearAmt = getVal('near_foreign_amount'), nearRate = getVal('near_rate');
+    const farAmt = getVal('far_foreign_amount'), farRate = getVal('far_rate');
+    const swPt = getVal('swap_point');
+    const hedgeY = getVal('hedge_yield');
+    const bondName = getVal('bond_name'), bondIsin = getVal('bond_isin');
+    const faceAmt = getVal('bond_face_amount');
+    const faceLine = faceAmt ? `${ccy} ${faceAmt}` : '';
+    const hedgeStr = hedgeY ? ` (연환산헤지수익률 ${hedgeY}%)` : '';
+    const hedgeStrInt = hedgeY ? ` (연환산 헤지수익률 ${hedgeY}%)` : '';
+
+    bene = `[FX Swap 1건]\n\n(1) FX Swap\n\n헤지대상 종목명 : ${bondName}\n헤지대상 종목 ISIN : ${bondIsin}\n헤지대상 액면금액 : ${faceLine}\n\n스왑거래일 : ${td}\n스왑결제일 : ${sd}\n스왑만기일 : ${md}\n\nNear : ${ccy} ${nearAmt} (@${nearRate})\nFar : ${ccy} ${farAmt} (@${farRate})\n스왑포인트 : ${swPt}${hedgeStr}\n\n거래기관 : ${cpFull()}`;
+
+    intl = `다음과 같이 1건의 장외파생상품 매매(FX 헤지거래)를 보고합니다.\n\n                                          ==  다  음  =\n1. FX Swap\n\n\n스왑거래일 : ${td}\n스왑결제일 : ${sd}\n스왑만기일 : ${md}\nNear : ${ccy} ${nearAmt}\nFar : ${ccy} ${farAmt}\n스왑포인트 : ${swPt}${hedgeStrInt}\n거래환율 : ${nearRate}\n거래기관 : ${cpFull()}\n펀드명 : ${fund()}\n헤지대상 채권 : ${bondName} (${bondIsin})`;
+
+  } else {
+    const ccy = getVal('sell_currency');
+    const td = getVal('trade_date'), vd = getVal('value_date');
+    const amt = getVal('sell_amount'), rate = getVal('exchange_rate');
+
+    bene = `[FX Sell 1건]\n\n(1) FX Today Sell - ${ccy}\n\n거래방향 : ${ccy} Sell / KRW Buy\n거래일 : ${td}\n결제일 : ${vd}\n거래금액 : ${ccy} ${amt}\n교환환율 : ${rate}\n거래기관 : ${cpFull()}`;
+
+    intl = `다음과 같이 1건의 외환 현물 거래를 보고합니다.\n\n                                          ==  다  음  =\n1. FX Today Sell\n거래일 : ${td}\n결제일 : ${vd}\n거래금액 : ${ccy} ${amt}\n거래방향 : ${ccy} Sell/KRW Buy\n거래환율 : ${rate}\n거래기관 : ${cpFull()}\n펀드명 : ${fund()}`;
+  }
+
+  document.getElementById('out-bene').textContent = bene;
+  document.getElementById('out-int').textContent = intl;
+}
+
+function regenReports() { if (parsedData) generateReports(); }
+
+function switchTab(tab, el) {
+  activeTab = tab;
+  document.querySelectorAll('.rtab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('out-bene').style.display = tab === 'bene' ? 'block' : 'none';
+  document.getElementById('out-int').style.display = tab === 'int' ? 'block' : 'none';
+  document.getElementById('out-label').textContent = tab === 'bene' ? '수익자용' : '내부결재용';
+}
+
+function copyReport() {
+  const id = activeTab === 'bene' ? 'out-bene' : 'out-int';
+  navigator.clipboard.writeText(document.getElementById(id).textContent)
+    .then(() => {
+      const btn = document.querySelector('.btn-copy');
+      btn.textContent = '복사됨 ✓';
+      setTimeout(() => btn.textContent = '복사', 1800);
+    });
+}
+</script>
+</body>
+</html>
