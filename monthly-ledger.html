@@ -78,6 +78,10 @@
   .tag-ccs { background: #eff6ff; color: #1d4ed8; }
   .tag-fxswap { background: #fef9c3; color: #854d0e; }
   .tag-sell { background: #f0fdf4; color: #15803d; }
+  .acct-tabs { display: flex; gap: 0; margin-bottom: 20px; border: 1px solid var(--border); border-radius: var(--radius-sm); overflow: hidden; width: fit-content; }
+  .acct-tab { padding: 7px 20px; font-size: 13px; font-weight: 500; cursor: pointer; border: none; background: var(--surface); color: var(--text-muted); font-family: var(--font); transition: all .15s; }
+  .acct-tab:not(:last-child) { border-right: 1px solid var(--border); }
+  .acct-tab.active { background: var(--accent); color: #fff; }
 </style>
 </head>
 <body>
@@ -88,6 +92,12 @@
 </div>
 
 <div class="main">
+
+  <!-- Account Tabs -->
+  <div class="acct-tabs">
+    <button class="acct-tab active" onclick="setAcct('general', this)">일반계정</button>
+    <button class="acct-tab" onclick="setAcct('special', this)">특별계정</button>
+  </div>
 
   <!-- Toolbar -->
   <div class="toolbar">
@@ -176,28 +186,41 @@
 // ── Storage Keys ──────────────────────────────────────────
 const MONTHS_KEY = 'ledger_months';
 const CURRENT_KEY = 'ledger_current_month';
+const ACCT_KEY = 'ledger_current_acct';
 
-function getMonths() {
+let currentAcct = localStorage.getItem(ACCT_KEY) || 'general';
+
+function getAcctLabel() { return currentAcct === 'general' ? '일반계정' : '특별계정'; }
+function setAcct(acct, el) {
+  currentAcct = acct;
+  localStorage.setItem(ACCT_KEY, acct);
+  document.querySelectorAll('.acct-tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  renderAll();
+}
   try { return JSON.parse(localStorage.getItem(MONTHS_KEY) || '[]'); } catch(e) { return []; }
 }
 function saveMonths(arr) { localStorage.setItem(MONTHS_KEY, JSON.stringify(arr)); }
 function getCurrentMonth() { return localStorage.getItem(CURRENT_KEY) || ''; }
 function setCurrentMonth(m) { localStorage.setItem(CURRENT_KEY, m); }
 
-function hedgeKey(m) { return `ledger_hedge_${m}`; }
-function sellKey(m) { return `ledger_fxsell_${m}`; }
+function hedgeKey(m) { return `ledger_hedge_${currentAcct}_${m}`; }
+function sellKey(m) { return `ledger_fxsell_${currentAcct}_${m}`; }
 function getRows(key) { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) { return []; } }
 function saveRows(key, rows) { localStorage.setItem(key, JSON.stringify(rows)); }
 
 // ── Init ─────────────────────────────────────────────────
 window.addEventListener('load', () => {
-  // 파서에서 임시 저장된 거래 가져오기
+  // 계정 탭 상태 복원
+  const savedAcct = localStorage.getItem(ACCT_KEY) || 'general';
+  currentAcct = savedAcct;
+  document.querySelectorAll('.acct-tab').forEach(t => {
+    t.classList.toggle('active', t.textContent.trim() === (savedAcct === 'general' ? '일반계정' : '특별계정'));
+  });
   importFromParser();
   buildMonthSelect();
   const cur = getCurrentMonth();
-  if (cur) {
-    document.getElementById('month-select').value = cur;
-  }
+  if (cur) { document.getElementById('month-select').value = cur; }
   renderAll();
 });
 
@@ -294,7 +317,8 @@ function clearMonth() {
 // ── Render ────────────────────────────────────────────────
 function renderAll() {
   const m = getCurrentMonth();
-  document.getElementById('page-title').textContent = m ? `${m.replace('-','년 ')}월 거래 대장` : '거래 대장';
+  const acctLabel = getAcctLabel();
+  document.getElementById('page-title').textContent = m ? `${acctLabel} · ${m.replace('-','년 ')}월 거래 대장` : `${acctLabel} 거래 대장`;
   renderHedge();
   renderSell();
 }
@@ -404,7 +428,7 @@ function copyTableTSV(type) {
   }
   if (rows.length === 0) { showToast('데이터가 없습니다'); return; }
 
-  const lines = [headers.join('\t')];
+  const lines = [];
   rows.forEach(row => {
     const padded = Array.from({length: headers.length}, (_, i) => (row[i] || '').toString());
     lines.push(padded.join('\t'));
