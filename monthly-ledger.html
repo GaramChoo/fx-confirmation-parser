@@ -168,52 +168,13 @@ function ensureMonth(m)  { const ms = getMonths(); if (!ms.includes(m)) { ms.pus
 
 // ── 초기화 ────────────────────────────────────────────────
 window.addEventListener('load', () => {
-  // 계정 탭 복원
   document.getElementById('tab-general').classList.toggle('active', acct === 'general');
   document.getElementById('tab-special').classList.toggle('active', acct === 'special');
-
-  // 파서에서 임시 저장된 데이터 가져오기
-  importFromParser();
-
-  // 월 선택 빌드
   buildMonthSelect();
   if (month) document.getElementById('month-select').value = month;
   updateTitle();
   renderAll();
 });
-
-function importFromParser() {
-  const hRaw = localStorage.getItem('ldg_tmp_hedge_' + acct);
-  const sRaw = localStorage.getItem('ldg_tmp_sell_' + acct);
-  if (!hRaw && !sRaw) return;
-
-  if (!month) {
-    const now = new Date();
-    const m = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-    ensureMonth(m);
-    month = m;
-    localStorage.setItem('ldg_month', m);
-  }
-
-  if (hRaw) {
-    try {
-      const rows = JSON.parse(hRaw);
-      const existing = getRows(hKey());
-      rows.forEach(r => existing.push(r));
-      saveRows(hKey(), existing);
-    } catch(e) {}
-    localStorage.removeItem('ldg_tmp_hedge_' + acct);
-  }
-  if (sRaw) {
-    try {
-      const rows = JSON.parse(sRaw);
-      const existing = getRows(sKey());
-      rows.forEach(r => existing.push(r));
-      saveRows(sKey(), existing);
-    } catch(e) {}
-    localStorage.removeItem('ldg_tmp_sell_' + acct);
-  }
-}
 
 // ── 계정 전환 ─────────────────────────────────────────────
 function setAcct(a) {
@@ -221,7 +182,6 @@ function setAcct(a) {
   localStorage.setItem('ldg_acct', a);
   document.getElementById('tab-general').classList.toggle('active', a === 'general');
   document.getElementById('tab-special').classList.toggle('active', a === 'special');
-  importFromParser();
   updateTitle();
   renderAll();
 }
