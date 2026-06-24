@@ -75,6 +75,10 @@
   .btn-secondary:hover { border-color: var(--border-strong); }
   .btn-copy { background: var(--bg); color: var(--text-muted); border: 1px solid var(--border); padding: 5px 12px; font-size: 12px; }
   .btn-copy:hover { color: var(--text); border-color: var(--border-strong); }
+  .btn-add-ledger { background: #f0fdf4; color: #15803d; border: 1px solid #86efac; padding: 9px 18px; font-size: 13px; font-weight: 500; border-radius: var(--radius-sm); cursor: pointer; width: 100%; margin-top: 10px; font-family: var(--font); transition: all .15s; }
+  .btn-add-ledger:hover { background: #dcfce7; }
+  .nav-link { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-muted); text-decoration: none; padding: 5px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); }
+  .nav-link:hover { border-color: var(--border-strong); color: var(--text); }
 
   .progress { text-align: center; font-size: 13px; color: var(--text-muted); min-height: 20px; margin-top: 10px; display: flex; align-items: center; justify-content: center; gap: 8px; }
   .spinner { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
@@ -107,9 +111,12 @@
   <div>
     <div class="header-title">컨펌 → 보고서 생성기</div>
   </div>
-  <div class="api-badge" onclick="openApiModal()">
-    <div class="dot-status" id="api-dot"></div>
-    <span id="api-label">API 키 설정</span>
+  <div style="display:flex;align-items:center;gap:10px">
+    <a href="monthly-ledger.html" class="nav-link">📋 월별 대장</a>
+    <div class="api-badge" onclick="openApiModal()">
+      <div class="dot-status" id="api-dot"></div>
+      <span id="api-label">API 키 설정</span>
+    </div>
   </div>
 </div>
 
@@ -170,6 +177,8 @@
       </div>
       <div class="output" id="out-bene"></div>
       <div class="output" id="out-int" style="display:none"></div>
+      <button class="btn-add-ledger" onclick="addToLedger()">＋ 월별 대장에 추가</button>
+      <div id="ledger-msg" style="font-size:12px;color:var(--text-muted);text-align:center;margin-top:6px;min-height:18px"></div>
     </div>
   </div>
 
@@ -529,6 +538,59 @@ function generateReports() {
 }
 
 function regenReports() { if (parsedData) generateReports(); }
+
+// ── Add to Monthly Ledger ─────────────────────────────────
+function addToLedger() {
+  if (!parsedData) return;
+  const d = parsedData;
+  let row = null;
+
+  if (d.trade_type === 'CCS' || d.trade_type === 'FX_SWAP') {
+    // 헤지 대장 (CCS + FX Swap 통합)
+    const tradeDate = getVal('trade_date') || getVal('trade_date');
+    const tradeType = d.trade_type === 'CCS' ? 'CCS' : 'FX Swap';
+    const bondName = getVal('bond_name') || '';
+    const ccy = d.trade_type === 'CCS'
+      ? (d.pay_coupon_currency || 'USD')
+      : (getVal('foreign_currency') || '');
+    const faceAmt = getVal('bond_face_amount') || '';
+    // face amount → mn 단위 변환 시도
+    let faceDisplay = faceAmt;
+    const num = parseFloat(faceAmt.replace(/,/g, ''));
+    if (!isNaN(num) && num >= 1000000) faceDisplay = (num / 1000000) + 'mn';
+    const settleDate = d.trade_type === 'CCS'
+      ? getVal('effective_date')
+      : getVal('near_value_date');
+    const maturityDate = d.trade_type === 'CCS'
+      ? getVal('termination_date')
+      : getVal('far_value_date');
+    const swapMargin = getVal('hedge_yield') || '';
+    const bank = getVal('bank_name') || '';
+    const isin = getVal('bond_isin') || '';
+
+    row = { table: 'hedge', data: [tradeDate, tradeType, bondName, ccy, faceDisplay, settleDate, maturityDate, swapMargin, bank, isin] };
+
+  } else {
+    // 외화매도 대장
+    const tradeDate = getVal('trade_date');
+    const ccy = getVal('sell_currency') || '';
+    const amt = getVal('sell_amount') || '';
+    const settleDate = getVal('value_date') || '';
+
+    row = { table: 'fxsell', data: [tradeDate, '외화 매도', ccy, amt, settleDate] };
+  }
+
+  // localStorage에 저장
+  const key = row.table === 'hedge' ? 'ledger_hedge' : 'ledger_fxsell';
+  let existing = [];
+  try { existing = JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) {}
+  existing.push(row.data);
+  localStorage.setItem(key, JSON.stringify(existing));
+
+  const msg = document.getElementById('ledger-msg');
+  msg.textContent = '✓ 대장에 추가됐습니다. 월별 대장 페이지에서 확인하세요.';
+  setTimeout(() => msg.textContent = '', 3000);
+}
 
 function switchTab(tab, el) {
   activeTab = tab;

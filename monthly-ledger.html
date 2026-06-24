@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>월별 거래 대장</title>
+<style>
+  :root {
+    --bg: #f9f9f8;
+    --surface: #ffffff;
+    --border: #e2e2df;
+    --border-strong: #c8c8c4;
+    --text: #1a1a18;
+    --text-muted: #6b6b67;
+    --accent: #1a1a18;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --font: -apple-system, 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
+    --mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.6; min-height: 100vh; }
+
+  .header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 0 24px; height: 52px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+  .header-title { font-size: 14px; font-weight: 600; }
+  .nav-link { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-muted); text-decoration: none; padding: 5px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg); }
+  .nav-link:hover { border-color: var(--border-strong); color: var(--text); }
+
+  .main { max-width: 1200px; margin: 0 auto; padding: 28px 24px 80px; }
+
+  .toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+  .toolbar-title { font-size: 15px; font-weight: 600; flex: 1; min-width: 120px; }
+  .month-select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 13px; background: var(--surface); color: var(--text); font-family: var(--font); outline: none; }
+  .month-select:focus { border-color: var(--accent); }
+
+  .btn { padding: 7px 14px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500; cursor: pointer; border: none; transition: all .15s; font-family: var(--font); }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { opacity: .85; }
+  .btn-outline { background: var(--surface); color: var(--text); border: 1px solid var(--border); }
+  .btn-outline:hover { border-color: var(--border-strong); }
+  .btn-danger { background: #fef2f2; color: #991b1b; border: 1px solid #fca5a5; }
+  .btn-danger:hover { background: #fee2e2; }
+  .btn-green { background: #f0fdf4; color: #15803d; border: 1px solid #86efac; }
+  .btn-green:hover { background: #dcfce7; }
+
+  .section { margin-bottom: 32px; }
+  .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+  .section-title { font-size: 13px; font-weight: 600; }
+  .section-actions { display: flex; gap: 8px; align-items: center; }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; background: var(--surface); }
+  thead th { background: #f5f5f3; padding: 9px 12px; text-align: left; font-weight: 600; font-size: 12px; color: var(--text-muted); white-space: nowrap; border-bottom: 1px solid var(--border); }
+  tbody td { padding: 8px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; vertical-align: middle; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: #fafaf8; }
+  .td-edit { padding: 6px 10px; font-size: 12px; font-family: var(--font); border: 1px solid transparent; border-radius: 4px; background: transparent; width: 100%; min-width: 80px; color: var(--text); outline: none; }
+  .td-edit:focus { border-color: var(--border-strong); background: var(--surface); }
+  .td-del { background: none; border: none; cursor: pointer; color: #d1d5db; font-size: 14px; padding: 2px 4px; }
+  .td-del:hover { color: #ef4444; }
+  .empty-row td { text-align: center; color: var(--text-muted); font-size: 13px; padding: 20px; }
+
+  .add-row { display: flex; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .add-row input, .add-row select { padding: 6px 9px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12.5px; background: var(--surface); color: var(--text); font-family: var(--font); outline: none; }
+  .add-row input:focus, .add-row select:focus { border-color: var(--accent); }
+
+  .copy-flash { animation: flash .4s ease; }
+  @keyframes flash { 0%,100%{background:var(--surface)} 50%{background:#f0fdf4} }
+
+  .toast { position: fixed; bottom: 20px; right: 20px; background: var(--accent); color: #fff; padding: 8px 16px; border-radius: var(--radius-sm); font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 999; }
+  .toast.show { opacity: 1; }
+
+  .manual-paste-area { width: 100%; min-height: 80px; padding: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 12.5px; font-family: var(--mono); resize: vertical; background: var(--surface); color: var(--text); outline: none; }
+  .manual-paste-area:focus { border-color: var(--accent); }
+  .collapse-btn { background: none; border: none; cursor: pointer; font-size: 12px; color: var(--text-muted); padding: 0; }
+
+  .tag { display: inline-block; padding: 1px 8px; border-radius: 100px; font-size: 11px; font-weight: 500; }
+  .tag-ccs { background: #eff6ff; color: #1d4ed8; }
+  .tag-fxswap { background: #fef9c3; color: #854d0e; }
+  .tag-sell { background: #f0fdf4; color: #15803d; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-title">📋 월별 거래 대장</div>
+  <a href="index.html" class="nav-link">← 컨펌 파서</a>
+</div>
+
+<div class="main">
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="toolbar-title" id="page-title">거래 대장</div>
+    <select class="month-select" id="month-select" onchange="loadMonth()"></select>
+    <button class="btn btn-outline" onclick="newMonth()">+ 월 추가</button>
+    <button class="btn btn-outline" onclick="togglePastePanel()">📥 보고서 텍스트 붙여넣기</button>
+    <button class="btn btn-danger" onclick="clearMonth()">월 초기화</button>
+  </div>
+
+  <!-- Paste Panel -->
+  <div id="paste-panel" style="display:none; margin-bottom:20px">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px 20px">
+      <div style="font-size:12px;font-weight:600;color:var(--text-muted);margin-bottom:8px">내부결재용 보고서 텍스트 붙여넣기 → 자동 파싱</div>
+      <textarea class="manual-paste-area" id="paste-text" placeholder="컨펌 파서에서 생성된 내부결재용 보고서 텍스트를 여기 붙여넣으세요..."></textarea>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn btn-primary" onclick="parsePastedText()">파싱해서 추가</button>
+        <button class="btn btn-outline" onclick="document.getElementById('paste-text').value=''">지우기</button>
+      </div>
+      <div id="paste-msg" style="font-size:12px;color:var(--text-muted);margin-top:6px;min-height:18px"></div>
+    </div>
+  </div>
+
+  <!-- Hedge Table (CCS + FX Swap) -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">CCS / FX Swap 헤지 거래</div>
+      <div class="section-actions">
+        <button class="btn btn-green" onclick="copyTableTSV('hedge')">Excel 복사</button>
+        <button class="btn btn-outline" onclick="addHedgeRow()">+ 행 추가</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="hedge-table">
+        <thead>
+          <tr>
+            <th>거래일자</th>
+            <th>거래 종류</th>
+            <th>헤지 대상</th>
+            <th>통화</th>
+            <th>헤지 액면금액</th>
+            <th>결제일</th>
+            <th>만기일</th>
+            <th>스왑마진</th>
+            <th>거래상대</th>
+            <th>ISIN</th>
+            <th style="width:32px"></th>
+          </tr>
+        </thead>
+        <tbody id="hedge-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- FX Sell Table -->
+  <div class="section">
+    <div class="section-header">
+      <div class="section-title">외화 매도</div>
+      <div class="section-actions">
+        <button class="btn btn-green" onclick="copyTableTSV('fxsell')">Excel 복사</button>
+        <button class="btn btn-outline" onclick="addSellRow()">+ 행 추가</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <table id="fxsell-table">
+        <thead>
+          <tr>
+            <th>거래일자</th>
+            <th>거래 방향</th>
+            <th>통화</th>
+            <th>금액</th>
+            <th>결제일</th>
+            <th style="width:32px"></th>
+          </tr>
+        </thead>
+        <tbody id="fxsell-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Storage Keys ──────────────────────────────────────────
+const MONTHS_KEY = 'ledger_months';
+const CURRENT_KEY = 'ledger_current_month';
+
+function getMonths() {
+  try { return JSON.parse(localStorage.getItem(MONTHS_KEY) || '[]'); } catch(e) { return []; }
+}
+function saveMonths(arr) { localStorage.setItem(MONTHS_KEY, JSON.stringify(arr)); }
+function getCurrentMonth() { return localStorage.getItem(CURRENT_KEY) || ''; }
+function setCurrentMonth(m) { localStorage.setItem(CURRENT_KEY, m); }
+
+function hedgeKey(m) { return `ledger_hedge_${m}`; }
+function sellKey(m) { return `ledger_fxsell_${m}`; }
+function getRows(key) { try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) { return []; } }
+function saveRows(key, rows) { localStorage.setItem(key, JSON.stringify(rows)); }
+
+// ── Init ─────────────────────────────────────────────────
+window.addEventListener('load', () => {
+  // 파서에서 임시 저장된 거래 가져오기
+  importFromParser();
+  buildMonthSelect();
+  const cur = getCurrentMonth();
+  if (cur) {
+    document.getElementById('month-select').value = cur;
+  }
+  renderAll();
+});
+
+function importFromParser() {
+  // 파서 페이지에서 저장한 임시 데이터 처리
+  const hRaw = localStorage.getItem('ledger_hedge');
+  const sRaw = localStorage.getItem('ledger_fxsell');
+  if (!hRaw && !sRaw) return;
+
+  const cur = getCurrentMonth();
+  if (!cur) {
+    // 현재 월이 없으면 이번달로 자동 생성
+    const now = new Date();
+    const m = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    ensureMonth(m);
+    setCurrentMonth(m);
+    document.getElementById('month-select').value = m;
+  }
+  const month = getCurrentMonth();
+
+  if (hRaw) {
+    try {
+      const rows = JSON.parse(hRaw);
+      const existing = getRows(hedgeKey(month));
+      rows.forEach(r => existing.push(r));
+      saveRows(hedgeKey(month), existing);
+    } catch(e) {}
+    localStorage.removeItem('ledger_hedge');
+  }
+  if (sRaw) {
+    try {
+      const rows = JSON.parse(sRaw);
+      const existing = getRows(sellKey(month));
+      rows.forEach(r => existing.push(r));
+      saveRows(sellKey(month), existing);
+    } catch(e) {}
+    localStorage.removeItem('ledger_fxsell');
+  }
+}
+
+function buildMonthSelect() {
+  const sel = document.getElementById('month-select');
+  const months = getMonths();
+  sel.innerHTML = '';
+  if (months.length === 0) {
+    const now = new Date();
+    const m = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    ensureMonth(m);
+    months.push(m);
+  }
+  months.sort().reverse().forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = m;
+    opt.textContent = m.replace('-', '년 ') + '월';
+    sel.appendChild(opt);
+  });
+  if (!getCurrentMonth() && months.length) {
+    setCurrentMonth(months[months.length - 1]);
+    sel.value = months[months.length - 1];
+  }
+}
+
+function ensureMonth(m) {
+  const months = getMonths();
+  if (!months.includes(m)) { months.push(m); saveMonths(months); }
+}
+
+function loadMonth() {
+  const m = document.getElementById('month-select').value;
+  setCurrentMonth(m);
+  renderAll();
+}
+
+function newMonth() {
+  const input = prompt('추가할 월을 입력하세요 (예: 2026-06)');
+  if (!input || !/^\d{4}-\d{2}$/.test(input.trim())) { alert('형식: YYYY-MM'); return; }
+  const m = input.trim();
+  ensureMonth(m);
+  buildMonthSelect();
+  document.getElementById('month-select').value = m;
+  setCurrentMonth(m);
+  renderAll();
+}
+
+function clearMonth() {
+  const m = getCurrentMonth();
+  if (!m) return;
+  if (!confirm(`${m} 데이터를 모두 삭제할까요?`)) return;
+  localStorage.removeItem(hedgeKey(m));
+  localStorage.removeItem(sellKey(m));
+  renderAll();
+}
+
+// ── Render ────────────────────────────────────────────────
+function renderAll() {
+  const m = getCurrentMonth();
+  document.getElementById('page-title').textContent = m ? `${m.replace('-','년 ')}월 거래 대장` : '거래 대장';
+  renderHedge();
+  renderSell();
+}
+
+const HEDGE_COLS = 10;
+const SELL_COLS = 5;
+
+function renderHedge() {
+  const m = getCurrentMonth();
+  const rows = m ? getRows(hedgeKey(m)) : [];
+  const tbody = document.getElementById('hedge-tbody');
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="${HEDGE_COLS+1}">거래 없음 — 컨펌 파서에서 추가하거나 + 행 추가를 클릭하세요</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map((row, i) => {
+    const cells = Array.from({length: HEDGE_COLS}, (_, c) => {
+      const val = (row[c] || '').toString().replace(/"/g,'&quot;');
+      return `<td><input class="td-edit" value="${val}" onchange="editHedge(${i},${c},this.value)"></td>`;
+    });
+    return `<tr>${cells.join('')}<td><button class="td-del" onclick="delHedge(${i})" title="삭제">×</button></td></tr>`;
+  }).join('');
+}
+
+function renderSell() {
+  const m = getCurrentMonth();
+  const rows = m ? getRows(sellKey(m)) : [];
+  const tbody = document.getElementById('fxsell-tbody');
+  if (rows.length === 0) {
+    tbody.innerHTML = `<tr class="empty-row"><td colspan="${SELL_COLS+1}">거래 없음</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = rows.map((row, i) => {
+    const cells = Array.from({length: SELL_COLS}, (_, c) => {
+      const val = (row[c] || '').toString().replace(/"/g,'&quot;');
+      return `<td><input class="td-edit" value="${val}" onchange="editSell(${i},${c},this.value)"></td>`;
+    });
+    return `<tr>${cells.join('')}<td><button class="td-del" onclick="delSell(${i})" title="삭제">×</button></td></tr>`;
+  }).join('');
+}
+
+// ── Edit / Delete ─────────────────────────────────────────
+function editHedge(i, c, v) {
+  const m = getCurrentMonth(); if (!m) return;
+  const rows = getRows(hedgeKey(m));
+  while (rows[i].length <= c) rows[i].push('');
+  rows[i][c] = v;
+  saveRows(hedgeKey(m), rows);
+}
+function editSell(i, c, v) {
+  const m = getCurrentMonth(); if (!m) return;
+  const rows = getRows(sellKey(m));
+  while (rows[i].length <= c) rows[i].push('');
+  rows[i][c] = v;
+  saveRows(sellKey(m), rows);
+}
+function delHedge(i) {
+  const m = getCurrentMonth(); if (!m) return;
+  const rows = getRows(hedgeKey(m));
+  rows.splice(i, 1);
+  saveRows(hedgeKey(m), rows);
+  renderHedge();
+}
+function delSell(i) {
+  const m = getCurrentMonth(); if (!m) return;
+  const rows = getRows(sellKey(m));
+  rows.splice(i, 1);
+  saveRows(sellKey(m), rows);
+  renderSell();
+}
+
+// ── Add Row ───────────────────────────────────────────────
+function addHedgeRow() {
+  const m = getCurrentMonth(); if (!m) return;
+  const rows = getRows(hedgeKey(m));
+  rows.push(['', '', '', '', '', '', '', '', '', '']);
+  saveRows(hedgeKey(m), rows);
+  renderHedge();
+  // 마지막 행 첫 셀 포커스
+  setTimeout(() => {
+    const inputs = document.querySelectorAll('#hedge-tbody input.td-edit');
+    if (inputs.length) inputs[inputs.length - HEDGE_COLS].focus();
+  }, 50);
+}
+function addSellRow() {
+  const m = getCurrentMonth(); if (!m) return;
+  const rows = getRows(sellKey(m));
+  rows.push(['', '', '', '', '']);
+  saveRows(sellKey(m), rows);
+  renderSell();
+  setTimeout(() => {
+    const inputs = document.querySelectorAll('#fxsell-tbody input.td-edit');
+    if (inputs.length) inputs[inputs.length - SELL_COLS].focus();
+  }, 50);
+}
+
+// ── TSV Copy ──────────────────────────────────────────────
+function copyTableTSV(type) {
+  const m = getCurrentMonth(); if (!m) return;
+  let headers, rows;
+  if (type === 'hedge') {
+    headers = ['거래일자','거래 종류','헤지 대상','통화','헤지 액면금액','결제일','만기일','스왑마진','거래상대','ISIN'];
+    rows = getRows(hedgeKey(m));
+  } else {
+    headers = ['거래일자','거래 방향','통화','금액','결제일'];
+    rows = getRows(sellKey(m));
+  }
+  if (rows.length === 0) { showToast('데이터가 없습니다'); return; }
+
+  const lines = [headers.join('\t')];
+  rows.forEach(row => {
+    const padded = Array.from({length: headers.length}, (_, i) => (row[i] || '').toString());
+    lines.push(padded.join('\t'));
+  });
+  navigator.clipboard.writeText(lines.join('\n')).then(() => {
+    showToast('복사됐습니다 — Excel에 붙여넣기 하세요');
+    const tbl = document.getElementById(type === 'hedge' ? 'hedge-table' : 'fxsell-table');
+    tbl.classList.add('copy-flash');
+    setTimeout(() => tbl.classList.remove('copy-flash'), 400);
+  });
+}
+
+// ── Paste Panel ───────────────────────────────────────────
+function togglePastePanel() {
+  const p = document.getElementById('paste-panel');
+  p.style.display = p.style.display === 'none' ? 'block' : 'none';
+}
+
+function parsePastedText() {
+  const text = document.getElementById('paste-text').value.trim();
+  if (!text) return;
+  const m = getCurrentMonth();
+  if (!m) { alert('먼저 월을 선택하세요'); return; }
+
+  let added = 0;
+
+  // CCS 파싱
+  const ccsBlocks = text.match(/\d+\.\s*CCS[\s\S]*?(?=\n\d+\.|$)/g) || [];
+  ccsBlocks.forEach(block => {
+    const td = (block.match(/스왑거래일\s*:\s*(\S+)/) || [])[1] || '';
+    const sd = (block.match(/스왑결제일\s*:\s*(\S+)/) || [])[1] || '';
+    const md = (block.match(/스왑만기일\s*:\s*(\S+)/) || [])[1] || '';
+    const notional = (block.match(/Notional\s*:\s*\S+\s+([\d,]+)/) || [])[1] || '';
+    const faceDisplay = notional ? (() => { const n = parseFloat(notional.replace(/,/g,'')); return isNaN(n) ? notional : (n>=1000000 ? n/1000000+'mn' : notional); })() : '';
+    const hedgeBond = (block.match(/헤지대상 채권\s*:\s*(.+?)\s*\(/) || [])[1]?.trim() || '';
+    const isin = (block.match(/헤지대상 채권\s*:.+?\((\S+)\)/) || [])[1] || '';
+    const bank = (block.match(/거래기관\s*:\s*(.+)/) || [])[1]?.trim() || '';
+    const bankName = bank.split(' ')[0] || bank;
+    const hedge = (block.match(/연환산 헤지수익률\s+([-+\d.]+)%/) || [])[1] || '';
+    // 통화 추정
+    const ccyMatch = block.match(/지급 쿠폰\s*:\s*(USD|EUR|GBP|AUD|CAD)/);
+    const ccy = ccyMatch ? ccyMatch[1] : 'USD';
+
+    if (td) {
+      const rows = getRows(hedgeKey(m));
+      rows.push([td, 'CCS', hedgeBond, ccy, faceDisplay, sd, md, hedge, bankName, isin]);
+      saveRows(hedgeKey(m), rows);
+      added++;
+    }
+  });
+
+  // FX Swap 파싱
+  const fxBlocks = text.match(/\d+\.\s*FX Swap[\s\S]*?(?=\n\d+\.|$)/g) || [];
+  fxBlocks.forEach(block => {
+    const td = (block.match(/스왑거래일\s*:\s*(\S+)/) || [])[1] || '';
+    const sd = (block.match(/스왑결제일\s*:\s*(\S+)/) || [])[1] || '';
+    const md = (block.match(/스왑만기일\s*:\s*(\S+)/) || [])[1] || '';
+    const nearLine = block.match(/Near\s*:\s*(USD|EUR|GBP|AUD|CAD)\s+([\d,]+\.?\d*)/);
+    const ccy = nearLine ? nearLine[1] : '';
+    const nearAmt = nearLine ? nearLine[2] : '';
+    const faceDisplay = nearAmt ? (() => { const n = parseFloat(nearAmt.replace(/,/g,'')); return isNaN(n) ? nearAmt : (n>=1000000 ? n/1000000+'mn' : nearAmt); })() : '';
+    const hedgeBond = (block.match(/헤지대상 채권\s*:\s*(.+?)\s*\(/) || [])[1]?.trim() || '';
+    const isin = (block.match(/헤지대상 채권\s*:.+?\((\S+)\)/) || [])[1] || '';
+    const bank = (block.match(/거래기관\s*:\s*(.+)/) || [])[1]?.trim() || '';
+    const bankName = bank.split(' ')[0] || bank;
+    const hedge = (block.match(/연환산 헤지수익률\s+([-+\d.]+)%/) || [])[1] || '';
+
+    if (td) {
+      const rows = getRows(hedgeKey(m));
+      rows.push([td, 'FX Swap', hedgeBond, ccy, faceDisplay, sd, md, hedge, bankName, isin]);
+      saveRows(hedgeKey(m), rows);
+      added++;
+    }
+  });
+
+  // FX Spot 파싱
+  const spotBlocks = text.match(/\d+\.\s*FX Today Sell[\s\S]*?(?=\n\d+\.|$)/g) || [];
+  spotBlocks.forEach(block => {
+    const td = (block.match(/거래일\s*:\s*(\S+)/) || [])[1] || '';
+    const vd = (block.match(/결제일\s*:\s*(\S+)/) || [])[1] || '';
+    const amtLine = block.match(/거래금액\s*:\s*(USD|EUR|GBP|AUD|CAD|JPY)\s+([\d,]+\.?\d*)/);
+    const ccy = amtLine ? amtLine[1] : '';
+    const amt = amtLine ? amtLine[2] : '';
+
+    if (td) {
+      const rows = getRows(sellKey(m));
+      rows.push([td, '외화 매도', ccy, amt, vd]);
+      saveRows(sellKey(m), rows);
+      added++;
+    }
+  });
+
+  const msg = document.getElementById('paste-msg');
+  if (added > 0) {
+    msg.textContent = `✓ ${added}건 추가됐습니다`;
+    renderAll();
+    document.getElementById('paste-text').value = '';
+    setTimeout(() => msg.textContent = '', 3000);
+  } else {
+    msg.textContent = '⚠ 파싱된 거래가 없습니다. 내부결재용 보고서 텍스트를 붙여넣었는지 확인하세요.';
+  }
+}
+
+// ── Toast ─────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2200);
+}
+</script>
+</body>
+</html>
