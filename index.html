@@ -580,8 +580,9 @@ function addToLedger() {
     row = { table: 'fxsell', data: [tradeDate, '외화 매도', ccy, amt, settleDate] };
   }
 
-  // localStorage에 저장
-  const key = row.table === 'hedge' ? 'ledger_hedge' : 'ledger_fxsell';
+  // localStorage에 저장 (계정 구분)
+  const acct = localStorage.getItem('ldg_acct') || 'general';
+  const key = row.table === 'hedge' ? `ldg_tmp_hedge_${acct}` : `ldg_tmp_sell_${acct}`;
   let existing = [];
   try { existing = JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) {}
   existing.push(row.data);
